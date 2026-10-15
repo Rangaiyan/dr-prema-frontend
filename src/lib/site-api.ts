@@ -90,9 +90,9 @@ async function getAll<T>(path: string): Promise<T[]> {
   const items: T[] = [];
   for (let page = 1; page <= 20; page++) {
     const data = await getJson<Paged<T> | null>(`${path}${sep}limit=50&page=${page}`, null);
-    if (!data) break;
+    if (!Array.isArray(data?.items)) break; // unexpected payload (wrong API_URL, error JSON)
     items.push(...data.items);
-    if (page >= data.meta.totalPages) break;
+    if (page >= (data.meta?.totalPages ?? 1)) break;
   }
   return items;
 }
