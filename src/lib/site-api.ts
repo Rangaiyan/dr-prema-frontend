@@ -69,10 +69,19 @@ async function request(path: string): Promise<Response | null> {
   }
 }
 
+/** Parses a JSON body, returning null when the response is not JSON (e.g. an HTML error page from a wrong API_URL). */
+async function parseJson<T>(res: Response): Promise<T | null> {
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function getJson<T>(path: string, fallback: T): Promise<T> {
   const res = await request(path);
   if (!res?.ok) return fallback;
-  return (await res.json()) as T;
+  return (await parseJson<T>(res)) ?? fallback;
 }
 
 /** Collects every page of a paginated endpoint (50 is the backend's page-size cap). */
@@ -139,12 +148,13 @@ export async function getServicePage(slug: string): Promise<ServicePage | null> 
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Failed to load service (${res.status})`);
 
-  const raw = (await res.json()) as RawService & {
+  const raw = await parseJson<RawService & {
     blogs: RawBlog[]; testimonials: RawTestimonial[];
     gallery: { id: number; imageUrl: string; altText: string }[];
     publications: { id: number; title: string; shortDescription: string; url: string }[];
     videos: { videoUrl: string }[];
-  };
+  }>(res);
+  if (!raw) throw new Error("The content service returned an invalid response");
   const base = toService(raw);
   const content = raw.content ?? {};
 
@@ -167,7 +177,8 @@ export async function getBlogArticle(slug: string): Promise<BlogArticle | null> 
   if (!res) throw new Error("The content service is unavailable");
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Failed to load article (${res.status})`);
-  const raw = (await res.json()) as RawBlog;
+  const raw = await parseJson<RawBlog>(res);
+  if (!raw) throw new Error("The content service returned an invalid response");
   return { ...toPost(raw), contentHtml: raw.content ?? "", metaTitle: raw.metaTitle ?? null, metaDescription: raw.metaDescription ?? null };
 }
 
